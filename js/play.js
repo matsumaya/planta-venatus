@@ -4,13 +4,21 @@ var playState = {
 
   // scores, healt points, and levels
   score : 0,
-  level : 1,
+  maxLevel : 3,
   hpMax : 100,
   scoreText : '',
   healthText : '',
-  
-  init : function(spriteKey) {
-         this.spriteKey = spriteKey;
+  nextSprite : {
+      "seedlingBrown" : "dandelionPlayer",
+      "seedlingBlue" : "succulentPlayer",
+      "seedlingRed" : "flytrapPlayer"
+  },
+  init : function(config) {
+         this.spriteKey = config.spriteKey;
+         this.startX = config.startX;
+         this.startY = config.startY;
+         this.level = config.level;
+
       },
   create : function() {
 
@@ -18,7 +26,7 @@ var playState = {
     // -800,-600                 800,-600
     //                 0,0
     // -800,600                  800,600
-    
+
     // a timer
 
     //  A simple background for our game
@@ -30,6 +38,7 @@ var playState = {
     this.dandelion.animations.play('blinking', 2, true);
 
     this.mushroomguy = game.add.sprite(600, 200, 'mushroomguy')
+
     //  The platforms group contains the ground and the 2 ledges we can jump on
     this.platforms = game.add.group();
 
@@ -55,15 +64,15 @@ var playState = {
     this.ledge.body.immovable = true;
 
     // The seedling and its settings
-    this.player = game.add.sprite(32, game.world.bottom - 160, this.spriteKey);
+    this.player = game.add.sprite(this.startX, this.startY, this.spriteKey);
     this.player.health = this.hpMax
     this.player.maxHealth = this.hpMax;
 
     //  We need to enable physics on the player and the other characters
 
     this.game.physics.arcade.enable(this.player);
-    //this.game.physics.arcade.enable(this.baddie);
     this.game.physics.arcade.enable(this.dandelion);
+    
     this.game.physics.arcade.enable(this.mushroomguy);
 
     //  seedling physics properties. Give the little guy a slight bounce.
@@ -74,14 +83,14 @@ var playState = {
 
 
     //  create baddies in a group
-    //this.baddie.scale.setTo(0.5,0.5);
     this.baddies = game.add.group();
     this.baddies.enableBody = true;
 
-    //create 4 in a group in random locations
+    //create a bunch (dependent on level) in a group in random locations
     var xx;
     var yy;
-    for (var i = 0; i < 5; i++)
+    var count = this.level * 5;
+    for (var i = 0; i < count; i++)
     {
       //now create baddie(slug) inside group
       xx = game.rnd.integerInRange(-800,800);
@@ -89,7 +98,7 @@ var playState = {
 
       var baddie = this.baddies.create(xx, yy, 'baddie');
 
-      var randomNumber = game.rnd.frac();
+      var randomNumber = game.rnd.realInRange(0.1,0.5);
       baddie.scale.setTo(randomNumber, randomNumber);
 
       //gravity
@@ -98,11 +107,6 @@ var playState = {
       //random bounce
       baddie.body.bounce.y = Math.random() * 0.2;
     }
-
-    //this.baddie.body.gravity.y = 300;
-    //this.baddie.body.collideWorldBounds = true;
-    //this.baddie.body.bounce.y = 0.2;
-    //this.baddie.body.velocity.x = 100;
 
     this.mushroomguy.body.bounce.y = 0.2;
     this.mushroomguy.body.gravity.y = 0;
@@ -113,11 +117,10 @@ var playState = {
     this.dandelion.body.collideWorldBounds = true;
     this.dandelion.body.velocity.x = -100;
 
-    //  Our two animations, walking left and right.
-    this.player.animations.add('left', [0, 1, 2, 3], 10, true);
-    this.player.animations.add('right', [5, 6, 7, 8], 10, true);
-
-    this.player.animations.add('bobble');
+    //  Our three animations, walking left and right.
+    this.player.animations.add('left', [3, 4, 5], 10, true);
+    this.player.animations.add('right', [0, 1, 2], 10, true);
+    //this.player.animations.add('bobble');
 
     this.stars = game.add.group();
 
@@ -126,7 +129,8 @@ var playState = {
     //  Here we'll create 12 of them evenly spaced apart
     var xx;
     var yy;
-    for (var i = 0; i < 12; i++)
+    var count = this.level * 12;
+    for (var i = 0; i < count; i++)
     {
         //  Create a star inside of the 'stars' group
         xx = game.rnd.integerInRange(-800,800);
@@ -183,10 +187,8 @@ update : function() {
     // other interactions
     game.physics.arcade.overlap(this.player, this.stars, this.collectStar, null, this);
     game.physics.arcade.overlap(this.player, this.baddies, this.seedlingDies, null, this);
-    game.physics.arcade.overlap(this.player, this.mushroomguy, this.speak, null, {this:this, text:this.quotes.pokemon1});
-
-
     game.physics.arcade.collide(this.player, this.mushroomguy, this.speak, null, this);
+
     //  Reset the seedlings velocity (movement)
     this.player.body.velocity.x = 0;
 
@@ -235,15 +237,15 @@ update : function() {
     // wrap around when player reaches world bounds
     //game.world.wrap(this.player,0,true);
 
-        //console.log(game.camera.x + "This is the game camera");
-
-
+    // Level up when score is cleanly divisible by 100 (remainder is 0)
+    if (this.score >= 100 && ((this.score % 100) == 0.)) {
+        this.levelUp();
+    };
 },
 randomQuote : function () {
     var keys = Object.keys(this.quotes)
     return this.quotes[keys[ keys.length * Math.random() << 0]];
 },
-
 collectStar : function(seedling, star) {
 
     // Removes the star from the screen
@@ -272,17 +274,60 @@ seedlingDies : function(seedling, baddie) {
   text.x = 200;
   text.y = 200;
 
+  var scoreBeforeDeath = this.score;
+  this.score = 0;
   // go to end screen (still need to be made, just go back to menu)
-  game.state.start('end',true,false,this.score,this.player.health,this.level);
+  game.state.start('end',true,false,scoreBeforeDeath,this.player.health,this.level);
   },
 speak : function() {
     quote = this.randomQuote();
     console.log(quote);
     var style = { font: "12px Arial", fill: "black", wordWrap: true, align: "center", backgroundColor: "transparent" };
     var textObject = game.add.text(this.mushroomguy.x + 10, this.mushroomguy.y + 10, quote, style);
+    textObject.lifespan = 5000;
     console.log(this.player.health);
     this.player.heal(20);
     this.healthText.text = 'health: ' + this.player.health;
-
+  },
+levelUp : function() {
+    console.log("leveling up");
+    // basically we are creating a completely new player object
+    this.level += 1;
+    this.score += 20;
+    var config = {
+        spriteKey : this.nextSprite[this.spriteKey],
+        startX : this.player.x,
+        startY : this.player.y,
+        level : this.level
+    }
+    console.log(config);
+    this.player.kill()
+    if (this.level < this.maxLevel) {
+        game.state.start('play',false,false,config);
+    } else {
+        // reached max level, no more sprites, go to end
+        game.state.start('end',true,false,this.score,this.player.health,this.level)
+    }
+//    var nowX = this.player.x;
+//    var nowY = this.player.y
+//    this.player.kill()
+//    this.player = game.add.sprite(nowX, nowY, this.nextSprite[this.spriteKey]);
+//    this.player.scale.setTo(2,2);
+//    this.game.physics.arcade.enable(this.player);
+//    this.player.body.bounce.y = 0.2;
+//    this.player.body.gravity.y = 300;
+//    this.player.body.collideWorldBounds = true;
+//    //  Our three animations, walking left and right and bobble.
+//    this.player.animations.add('left', [0, 1, 2], 10, true);
+//    this.player.animations.add('right', [3, 4, 5], 10, true);
+//    this.player.animations.add('bobble');
+//    this.player.health = this.hpMax;
+//    this.player.maxHealth = this.hpMax;
+//    game.camera.follow(this.player);
+//    this.level += 1;
+//    this.levelText = "level: " + this.level;
+//    //  Add and update the score
+//    this.score += 20;
+//    this.scoreText.text = 'Score: ' + this.score;
   }
 }; // end of playState object definition
